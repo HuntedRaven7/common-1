@@ -322,8 +322,8 @@ def test_schema_validator_pins_the_shipped_chairlift_release():
     validator = CHAIRLIFT_VALIDATOR.read_text(encoding="utf-8")
 
     refs = re.findall(r'^CHAIRLIFT_SCHEMA_REF = "([^"]+)"$', validator, re.MULTILINE)
-    assert refs == ["v26.10.4"], (
-        f"expected exactly one CHAIRLIFT_SCHEMA_REF pinned to v26.10.4, got {refs}"
+    assert refs == ["v26.10.5"], (
+        f"expected exactly one CHAIRLIFT_SCHEMA_REF pinned to v26.10.5, got {refs}"
     )
 
     urls = re.findall(r"https://raw\.githubusercontent\.com/projectbluefin/chairlift/\S*", validator)
@@ -777,12 +777,12 @@ def test_help_links_point_at_bluefin():
 def test_brewfile_taps_homebrew_tap_with_trust():
     """Homebrew 6 blocks untrusted taps silently; trusted: true is load-bearing.
 
-    The cask must stay the rebranded upstream release: ublue-os/tap
+    The cask must stay the rebranded upstream release: projectbluefin/tap
     pins projectbluefin/chairlift, which is the source the schema gate in
     tests/check-chairlift-config validates against."""
     content = BREWFILE.read_text(encoding="utf-8")
-    assert 'tap "ublue-os/tap", trusted: true' in content
-    assert 'cask "ublue-os/tap/chairlift"' in content
+    assert 'tap "projectbluefin/tap", trusted: true' in content
+    assert 'cask "projectbluefin/tap/chairlift"' in content
 
 
 # ---------------------------------------------------------------------------
