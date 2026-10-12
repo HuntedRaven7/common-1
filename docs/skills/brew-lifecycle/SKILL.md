@@ -1,7 +1,7 @@
 ---
 name: brew-lifecycle
-version: "1.5"
-last_updated: "2026-10-09"
+version: "1.6"
+last_updated: "2026-10-12"
 id: brew-lifecycle
 one_line_purpose: Manage OS-managed Homebrew packages and RPM/brew placement.
 entry_point: docs/skills/brew-lifecycle/SKILL.md

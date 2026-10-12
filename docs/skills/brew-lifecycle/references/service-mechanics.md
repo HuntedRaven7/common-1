@@ -47,9 +47,22 @@ Brewfiles.
 
 ### On every login
 
-1. Hash all `preinstall.d/*.Brewfile` files combined.
-2. Compare to stored hash. **Identical → fast exit**, nothing touched.
-3. **Different:** snapshot installed formulae and casks, then run
+1. Tap and trust every `tap` line declared across all Brewfiles (idempotent;
+   runs before the migration gate and the hash early-exit because `brew bundle
+   cleanup` resets the global trust store).
+2. Migrate a stranded legacy `frostyard/tap/chairlift` or
+   `ublue-os/tap/chairlift` cask to the rebranded
+   `projectbluefin/tap/chairlift` if the rebranded cask is in a managed
+   Brewfile and a non-`projectbluefin/tap` chairlift receipt is installed (see
+   the ChairLift lifecycle and config ownership section below). A failed
+   uninstall exits 1 before any state is written; a successful migration is a
+   no-op on subsequent runs because the installed cask now matches
+   `projectbluefin/tap`.
+3. Hash all `preinstall.d/*.Brewfile` files combined.
+4. Compare to stored hash. **Identical → fast exit**, nothing touched —
+   unless step 2 just migrated, in which case continue to step 5 so the
+   rebranded cask gets installed.
+5. **Different:** snapshot installed formulae and casks, then run
    `brew bundle --file=` on each Brewfile (idempotent). A declaration already
    installed in the snapshot remains user-owned unless it was already present
    in the previous managed state. A new declaration absent from the snapshot
@@ -60,12 +73,12 @@ Brewfiles.
    deleted once the run reaches the state write.
    Continue through independent Brewfiles, but exit before removals and state
    writes if any bundle fails.
-4. Diff previous formula and cask sets (from state JSON) against the current
+6. Diff previous formula and cask sets (from state JSON) against the current
    declarations (from Brewfiles). Uninstall dropped entries only if
    `brew list --formula` or `brew list --cask` confirms they are installed.
-5. If any uninstall fails, exit before the state write so the removal is
+7. If any uninstall fails, exit before the state write so the removal is
    retried on the next service run.
-6. Write the new hash, formula list, and cask list atomically (tmp + mv).
+8. Write the new hash, formula list, and cask list atomically (tmp + mv).
 
 **The service is content-addressed, not version-numbered.** Never bump a
 counter to propagate a Brewfile change — just edit the file. The hash change
@@ -117,17 +130,33 @@ pinned upstream in `projectbluefin/tap`, which tracks
 `projectbluefin/chairlift` releases.
 
 Machines with ChairLift installed from a legacy tap (`frostyard/tap/chairlift`
-or `ublue-os/tap/chairlift`) are migrated by `brew-preinstall` before it
-bundles: it uninstalls the legacy cask by its qualified name and lets the
-bundle install `projectbluefin/tap/chairlift`. Only `frostyard/tap` is
-untapped afterwards; `ublue-os/tap` stays for other Brewfiles. Detection must
-read *installed* state only (`brew info --json=v2 --installed`, which
-enumerates the Caskroom and resolves each entry from its own installed
+or `ublue-os/tap/chairlift`) are migrated by `brew-preinstall` *before* the
+content-addressed hash check, so a previously stamped unchanged hash cannot
+permanently strand an existing legacy receipt. The migration runs on every
+login when the rebranded cask is in the managed Brewfile and a
+non-`projectbluefin/tap` chairlift is installed: it uninstalls the legacy cask
+by its qualified name and lets the bundle install
+`projectbluefin/tap/chairlift`. Once the installed cask matches
+`projectbluefin/tap`, subsequent runs are no-ops gated on the same
+installed-state check. A failed uninstall aborts the run with exit 1 and
+leaves the previous state hash untouched so the next login retries.
+A successful migration always reaches `brew bundle`, even with an unchanged
+hash. Only `frostyard/tap` is untapped, and only after every bundle succeeds;
+`ublue-os/tap` stays for other Brewfiles. If a bundle fails and no chairlift
+is installed afterwards, the legacy cask is reinstalled from its still-present
+tap before exit 1, so the next login's gate sees it and retries the migration.
+Detection must read *installed* state only (`brew info --json=v2 --installed`,
+which enumerates the Caskroom and resolves each entry from its own installed
 caskfile): once several taps are present, the bare token `chairlift` is
-ambiguous, so `brew info --cask chairlift` either errors or answers for the
-new, uninstalled cask. An inconclusive answer migrates rather than skips — the
-bundle that runs immediately afterwards repairs a redundant uninstall, while a
-skipped migration strands the user on the legacy tap with the hash stamped.
+ambiguous, so `brew info --cask chairlift` and `brew list --cask chairlift`
+either error or answer for the new, uninstalled cask. Because the gate runs
+every login, that inventory query is only issued when
+`$HOMEBREW_PREFIX/Caskroom/chairlift` exists. If the query itself fails, the
+run logs `warning: brew info --installed failed` and skips the migration for
+that run; the next login retries it. An inconclusive installed tap migrates
+rather than skips — the bundle that runs immediately afterwards repairs a
+redundant uninstall, while a skipped migration strands the user on the legacy
+tap with the hash already stamped.
 
 Bluefin owns the maintainer defaults at `/usr/share/chairlift/config.yml`
 (`system_files/shared/usr/share/chairlift/config.yml` in this repo). Admins own
