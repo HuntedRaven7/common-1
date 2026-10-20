@@ -1,6 +1,6 @@
 # Placement Rules — brew-lifecycle
 
-Part of [brew-lifecycle](../SKILL.md) — the no-rpm-ostree rule, what can move to brew, Homebrew 6.0 tap trust requirements, and Starship shell initialization details.
+Part of [brew-lifecycle](../SKILL.md) — the no-rpm-ostree rule, what can move to brew, Homebrew 6.0 tap trust requirements, and Starship/brew shell initialization details.
 
 ---
 
@@ -143,3 +143,31 @@ if command -q starship
 end
 ```
 Falls back to `vendor_functions.d/fish_prompt.fish` when starship is absent.
+
+## brew shellenv initialization
+
+Homebrew is on PATH only after `brew shellenv` runs. Per shell:
+
+| Shell | Where | Form |
+|---|---|---|
+| bash | `profile.d` (downstream repos) | `eval "$(brew shellenv)"` |
+| zsh | `etc/zsh/zshrc` (downstream repos, `[[ -o interactive ]]` guard) | `eval "$(.../brew shellenv)"` |
+| fish | `usr/share/fish/vendor_conf.d/brew.fish` (here, `status is-interactive` guard) | `/home/linuxbrew/.linuxbrew/bin/brew shellenv \| source` |
+
+### Do NOT pass `--shell` to `brew shellenv` from fish
+
+Calling plain `brew shellenv` from a fish process auto-detects fish from /proc
+ancestry and emits fish syntax (`set --global --export ...`). Passing
+`--shell=fish` emits **bash syntax** (`export ...`) even under fish on current
+Homebrew (verified on 7.0.10), which fails when sourced. Leave it plain.
+
+### fish guard rationale
+
+The `status is-interactive` guard keeps a `brew` subprocess (ruby startup,
+tens of ms) out of every non-interactive `fish -c` / script session, matching
+the zsh `[[ -o interactive ]]` pattern. The `test -x` check is the silent
+fallback: no-op until brew exists, so first sessions before/without brew stay
+clean — the same pattern as `starship.fish`.
+
+fish dedupes PATH, so re-evaluating shellenv in a fish started from a bash
+login shell that already ran brew shellenv is harmless.
