@@ -152,7 +152,7 @@ Homebrew is on PATH only after `brew shellenv` runs. Per shell:
 |---|---|---|
 | bash | `profile.d` (downstream repos) | `eval "$(brew shellenv)"` |
 | zsh | `bluefin/etc/zsh/zshrc` (here, `[[ -o interactive ]]` guard) | `eval "$(.../brew shellenv)"` |
-| fish | `usr/share/fish/vendor_conf.d/brew.fish` (here, `status is-interactive` guard) | `/home/linuxbrew/.linuxbrew/bin/brew shellenv \| source` |
+| fish | `usr/share/fish/vendor_conf.d/brew.fish` (here, `status is-interactive` guard) | `/home/linuxbrew/.linuxbrew/bin/brew shellenv fish \| source` |
 
 ### `brew shellenv` takes a positional shell name — there is no `--shell` flag
 
@@ -161,9 +161,16 @@ fish`); the value lands in `HOMEBREW_SHELL_NAME="${1:-}"`. Passing
 `--shell=fish` is not an error either: the unrecognized word is used as the
 shell name, matches nothing, and falls through to the POSIX `export ...`
 branch, which fails when sourced by fish (verified on Homebrew 7.0.10).
-Plain `brew shellenv` auto-detects fish from the parent process
-(`/bin/ps -p $PPID -o comm=`) and emits fish syntax; `brew shellenv fish` is
-the supported explicit form. Never pass `--shell`.
+Never pass `--shell`.
+
+Without a positional name, `brew shellenv` auto-detects fish via
+`/bin/ps -p "${PPID}" -c -o comm=`, which Homebrew's own source annotates as
+"known to fail under some sandboxes"; on failure it falls back to
+`${SHELL##*/}` — and for fish sessions whose parent chain or `$SHELL` says
+bash (e.g. Ghostty opt-in where `chsh` was never run), that lands in the
+POSIX branch whose output is a fish syntax error on every interactive start.
+Shipped fish files must therefore pass the explicit positional form:
+`brew shellenv fish | source`.
 
 ### fish guard rationale
 
