@@ -151,23 +151,31 @@ Homebrew is on PATH only after `brew shellenv` runs. Per shell:
 | Shell | Where | Form |
 |---|---|---|
 | bash | `profile.d` (downstream repos) | `eval "$(brew shellenv)"` |
-| zsh | `etc/zsh/zshrc` (downstream repos, `[[ -o interactive ]]` guard) | `eval "$(.../brew shellenv)"` |
+| zsh | `bluefin/etc/zsh/zshrc` (here, `[[ -o interactive ]]` guard) | `eval "$(.../brew shellenv)"` |
 | fish | `usr/share/fish/vendor_conf.d/brew.fish` (here, `status is-interactive` guard) | `/home/linuxbrew/.linuxbrew/bin/brew shellenv \| source` |
 
-### Do NOT pass `--shell` to `brew shellenv` from fish
+### `brew shellenv` takes a positional shell name — there is no `--shell` flag
 
-Calling plain `brew shellenv` from a fish process auto-detects fish from /proc
-ancestry and emits fish syntax (`set --global --export ...`). Passing
-`--shell=fish` emits **bash syntax** (`export ...`) even under fish on current
-Homebrew (verified on 7.0.10), which fails when sourced. Leave it plain.
+`brew shellenv` takes the shell as a *positional* argument (`brew shellenv
+fish`); the value lands in `HOMEBREW_SHELL_NAME="${1:-}"`. Passing
+`--shell=fish` is not an error either: the unrecognized word is used as the
+shell name, matches nothing, and falls through to the POSIX `export ...`
+branch, which fails when sourced by fish (verified on Homebrew 7.0.10).
+Plain `brew shellenv` auto-detects fish from the parent process
+(`/bin/ps -p $PPID -o comm=`) and emits fish syntax; `brew shellenv fish` is
+the supported explicit form. Never pass `--shell`.
 
 ### fish guard rationale
 
-The `status is-interactive` guard keeps a `brew` subprocess (ruby startup,
-tens of ms) out of every non-interactive `fish -c` / script session, matching
-the zsh `[[ -o interactive ]]` pattern. The `test -x` check is the silent
-fallback: no-op until brew exists, so first sessions before/without brew stay
-clean — the same pattern as `starship.fish`.
+The `status is-interactive` guard keeps a `brew` subprocess out of every
+non-interactive `fish -c` / script session (`shellenv` is pure bash — it
+never loads Ruby), matching the zsh `[[ -o interactive ]]` pattern. The
+`test -x` check is the silent fallback: no-op until brew exists, so first
+sessions before/without brew stay clean — the same pattern as
+`starship.fish`.
 
-fish dedupes PATH, so re-evaluating shellenv in a fish started from a bash
-login shell that already ran brew shellenv is harmless.
+Idempotence comes primarily from `homebrew-shellenv` itself: it returns
+early when `HOMEBREW_PATH` already starts with
+`$HOMEBREW_PREFIX/bin:$HOMEBREW_PREFIX/sbin`, so a fish started from a bash
+login shell that already ran brew shellenv is left untouched; fish PATH
+dedupe is a secondary layer.
